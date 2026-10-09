@@ -186,88 +186,44 @@ Prompt-only frozen bundles of every benchmark (the deployment prompts in their f
 
 ## Pipeline
 
-The lifecycle follows Algorithm 1 of the paper. The harness state is a bounded procedural memory in the main experiments and the experience block of a coding agent in the agent-harness study; everything else is shared.
+The lifecycle follows Algorithm 1 of the paper; nothing from benchmark answers or final-evaluator feedback enters deployment at any step.
 
-1. **Relation discovery** (`src/ucoe/relations.py`, optional). The actor and a larger frozen comparison model answer the same development prompts. The verifier model reads each pair in random order with system identities hidden and names atomic, task-general differences. A relation is kept only if it recurs in at least three prompts and can be written as one binary criterion with one edit that breaks that property alone. Retained relations become benchmark-specific contrast families and extra criteria offered to synthesis.
-2. **Candidate synthesis** (`src/ucoe/verifier.py`, `src/ucoe/synthesis.py`). From the public task requirements, the shared criteria and the discovered relations, the verifier model proposes candidate verifier programs. A program is a set of criteria, each with explicit 0/1 anchors (semantic criteria are scored by the verifier model, mechanical ones are computed directly), plus one aggregation expression over the scores that must stay within [0, 1]. A candidate may append at most two criteria of its own. A static validator discards programs with undefined criteria, new criteria that do not affect the output, or probe score vectors that produce non-finite or out-of-range values.
-3. **Response contrasts** (`src/ucoe/contrasts.py`). Each contrast starts from the actor's own answer to a public calibration prompt disjoint from deployment and applies one targeted edit: omission of the two most information-dense sentences (or lines of a code-dominated answer), injection of an unsupported claim, or insertion of irrelevant material; story generation uses narrative edits of the same kind, and each relation family uses its own declared edit. Sources are assigned to the selection or held-out split before any verifier is scored, a source contributes at most one contrast per family, and every checkpoint draws fresh sources. A family that cannot fill its quota records the shortfall and the run continues.
-4. **Driving-capacity selection** (`src/ucoe/selection.py`). Every candidate scores the same contrasts with transformation names and preference directions hidden. A candidate succeeds on a contrast only if its reward for the base response exceeds the degraded one by more than the margin ε; a tie, a sub-margin lead or an invalid score is a failure. Each family gets a centered accuracy J = 2p − 1, and the candidate with the largest worst-family J (rounded to four decimals) wins, with ties broken by mean accuracy, then aggregation simplicity, then fixed candidate order. The initial winner becomes the deployed verifier.
-5. **Verifier-guided repair, acceptance and procedural memory** (`src/ucoe/revision.py`, `src/ucoe/memory.py`, `src/ucoe/lifecycle.py`). For each task the actor drafts with the retrieved procedures as guidelines (Algorithm 1; `ucoe.memory.at_draft: false` instead serves the sealed Direct Generation draft byte for byte and retrieves only for the revision, which is how the runs behind the reported tables were configured). The deployed verifier scores the draft, takes the weakest participating criterion (deterministic criteria included), and the diagnosis call returns a localized witness and one repair instruction. The actor makes one local repair, the same verifier rescores it, and the revision is served only if its reward exceeds the draft's by more than ε; unusable feedback, a missing revision or an invalid score serves the draft. Only after the response is returned may an accepted repair be distilled into at most one generalized trigger/action procedure (trigger ≤ 10 words, action ≤ 14 words, no task-specific entities or numbers); a rejected revision updates usage statistics only. Retrieval ranks procedures by criterion match, dimension match and acceptance record and returns at most two within 64 words; near duplicates are dropped at token-set Jaccard 0.75, and the capacity is 12 procedures overall and 2 per dimension, evicting the weakest record with ties broken by age.
-6. **Checkpoint evolution** (`src/ucoe/selection.py`, `promotion`). At each scheduled checkpoint UCoE summarizes up to the last 128 completed tasks (revision-acceptance rate, most-often-weakest criteria, harness-state size) and synthesizes one challenger from the current verifier's definitions, which may append criteria or change the aggregation. The current verifier joins the pool, maximin selection is repeated on that checkpoint's fresh contrasts, and the winner replaces the current verifier only if it (i) strictly improves worst-family accuracy on the selection split, (ii) wins more held-out contrasts than it loses against the current verifier on the same contrasts, and (iii) regresses on no existing family by more than κ = 0.10. Any failed or undefined comparison retains the current verifier, and an adoption first affects the next task.
-
-Nothing from benchmark answers or final-evaluator feedback enters deployment at any step.
+1. **Relation discovery** (optional, `src/ucoe/relations.py`): the actor and a larger comparison model answer the same development prompts; the verifier model mines recurring, task-general differences, which become benchmark-specific contrast families and extra criteria.
+2. **Candidate synthesis** (`src/ucoe/synthesis.py`): the verifier model proposes verifier programs, each a set of 0/1 criteria plus one bounded aggregation expression; a candidate may append at most two criteria, and a static validator discards malformed programs.
+3. **Response contrasts** (`src/ucoe/contrasts.py`): the actor's own answers to calibration prompts, each degraded by exactly one declared edit (omission, unsupported claim, irrelevant insertion, or a relation-specific edit), split into selection and held-out banks.
+4. **Driving-capacity selection** (`src/ucoe/selection.py`): candidates are ranked by their centered accuracy on the weakest contrast family, and the maximin winner is deployed.
+5. **Repair and harness update** (`src/ucoe/revision.py`, `src/ucoe/memory.py`): for each task the verifier scores the draft and localizes its weakest criterion, the actor makes one repair, and the revision is served only if its reward beats the draft's by the margin ε; an accepted repair may add one generalized procedure to the bounded memory that later drafts and repairs retrieve as guidelines.
+6. **Checkpoint evolution** (`src/ucoe/selection.py`): a challenger synthesized from the current verifier and the task diagnostics replaces it only if it wins on the selection split, wins more held-out contrasts than it loses, and regresses on no family by more than κ.
 
 ### Evaluation
 
-`bash eval.sh` scores the served responses of an arm against the matched direct-generation response of the same actor. The judge model compares the two full responses in **both presentation orders**, blinded and with deterministic decoding; the two verdicts are merged by sign into a task-level win, tie or loss (identical texts are mechanical ties), and
-
-    Pref = 100 · (W + T/2) / (W + T + L),
-
-so 50 is parity. The report includes a block bootstrap interval (blocks of 64 tasks, 50,000 resamples), an exact sign test and Holm correction over the arms compared. The `native` mode runs each benchmark's own metric where one exists: WildBench score (1&ndash;10, official template), WritingBench Critic-7B score, MultiChallenge hidden-rubric accuracy, RefineBench checklist accuracy, IFBench prompt-level accuracy from the vendored official evaluator (loose by default, the 34.67 / 30.00 of Table 2; `evaluation.native.ifbench_primary: strict_prompt_acc` selects the strict variant, and all four official figures, strict and loose at the prompt and instruction level, are written), Hard-MATH answer accuracy, and BigCodeBench-Hard Pass@1 by execution. The Arena-Hard style-controlled win rate comes from the official `arena-hard-auto` toolkit, which is not part of this release: `bash eval.sh configs/arena_hard_qwen8b.yaml native` exports each arm's served answers in the toolkit's `model_answer` layout under `<work_dir>/eval/arena_hard_official/` and prints the `gen_judgment` / `show_result` commands with the paper's judge (gpt-4.1-2025-04-14) and anchor (o3-mini-2025-01-31). SpreadsheetBench-2 uses the benchmark checker with LibreOffice recalculation (`run_agent_harness.sh ... official`).
+`bash eval.sh` scores each arm against the matched Direct Generation response of the same actor: the judge compares the two full responses in both presentation orders, blinded, and the verdicts are merged into a task-level win, tie or loss, giving Pref = 100 · (W + T/2) / (W + T + L) with 50 as parity, a block bootstrap interval and a sign test. The `native` mode runs each benchmark's own metric (WildBench score, WritingBench critic, MultiChallenge rubric, RefineBench checklist, IFBench official evaluator, Hard-MATH answer match, BigCodeBench-Hard execution); for Arena-Hard it exports the answers for the official `arena-hard-auto` toolkit, and SpreadsheetBench-2 uses the benchmark checker (`run_agent_harness.sh ... official`).
 
 ## Reproducing paper results
 
-Every preset in `configs/` reproduces one paper setting; its header comment names the table and row. The actors are `Qwen/Qwen3-8B` and `Qwen/Qwen3.8-27B`, the verifier model (program synthesis, semantic criterion scoring, diagnosis and distillation) is `Qwen/Qwen3.6-35B-A3B`, the comparison model for relation discovery is Qwen3.8-27B for the 8B actor and Qwen3.5-397B-A17B for the 27B actor, and the final judge is `Qwen/Qwen3.5-397B-A17B`. The main experiments serve all of them through the Tinker API.
-
-**Table 1, open-ended preference against direct generation (50 = parity).**
-
-| Preset | Benchmark | Relation discovery | Checkpoints | UCoE (paper) |
-|--------|-----------|--------------------|-------------|--------------|
-| `arena_hard_qwen8b.yaml` | Arena-Hard, Qwen3-8B | off | 128, 256 | 58.30 |
-| `writingprompts_qwen8b.yaml` | WritingPrompts, Qwen3-8B | off | 512, 1024 | 62.79 |
-| `wildbench_qwen8b.yaml` | WildBench, Qwen3-8B | off | 256, 512 | 57.42 |
-| `writingbench_qwen8b.yaml` | WritingBench, Qwen3-8B | on | 128, 256 | 56.90 |
-| `multichallenge_qwen8b.yaml` | MultiChallenge, Qwen3-8B | off | 48, 96 | 57.42 |
-| `refinebench_qwen8b.yaml` | RefineBench, Qwen3-8B | on | 96, 192 | 61.15 |
-| `arena_hard_qwen27b.yaml` | Arena-Hard, Qwen3.8-27B | on | 128, 256 | 59.70 |
-| `writingprompts_qwen27b.yaml` | WritingPrompts, Qwen3.8-27B | on | 512, 1024 | 63.92 |
-| `wildbench_qwen27b.yaml` | WildBench, Qwen3.8-27B | on | 256, 512 | 55.42 |
-| `writingbench_qwen27b.yaml` | WritingBench, Qwen3.8-27B | on | 128, 256 | 54.40 |
-| `multichallenge_qwen27b.yaml` | MultiChallenge, Qwen3.8-27B | off | 48, 96 | 51.95 |
-| `refinebench_qwen27b.yaml` | RefineBench, Qwen3.8-27B | off | 96, 192 | 57.73 |
-
-The six-benchmark means are 59.00 (Qwen3-8B) and 57.19 (Qwen3.8-27B).
-
-**Table 2, verifiable tasks with Qwen3-8B** (accuracy for IFBench and Hard-MATH, Pass@1 for BigCodeBench-Hard; direct generation in parentheses).
-
-| Preset | Benchmark | Checkpoints | UCoE (paper) |
-|--------|-----------|-------------|--------------|
-| `ifbench_qwen8b.yaml` | IFBench | 48, 96 | 34.67 (30.00) |
-| `hard_math_qwen8b.yaml` | Hard-MATH | 128, 256 | 59.16 (56.54) |
-| `bigcodebench_qwen8b.yaml` | BigCodeBench-Hard | 48, 96 | 21.62 (21.62) |
-
-The three-benchmark mean rises from 36.06 to 38.48. Run `bash eval.sh <preset> all` to get both the preference score and the native metric.
-
-The relation-discovery column and the checkpoint schedules are those of the research runs behind each cell; the paper states them only for Arena-Hard. Where a run departed from the Arena-Hard defaults, the preset header says so and the preset carries the run's values: IFBench, MultiChallenge and RefineBench draw 8 selection / 40 (36 for MultiChallenge) held-out sources per family from their small calibration pools and may reuse a source across checkpoints; WritingPrompts, Hard-MATH and BigCodeBench-Hard use 48 held-out sources; every benchmark other than Arena-Hard revises at temperature 0.3, and WritingBench, MultiChallenge, RefineBench and IFBench draft greedily.
-
-**Arena-Hard ablations with Qwen3-8B** (preference against direct generation). The paper removes one component at a time from `arena_hard_qwen8b.yaml` (58.30): *fixed verifier* (56.60) freezes the initial verifier, which corresponds to `ucoe.checkpoints: []`; *no memory updates* (56.70) disables harness-state updates from accepted repairs, which corresponds to `ucoe.memory.capacity: 0`; *random initial verifier* (56.70) replaces driving-capacity selection with a seeded random draw from the candidate pool, and *harness-state updates only* (50.80) removes the current-task repair so that the verifier only updates the harness state. The last two change the algorithm rather than a configuration value and are not shipped as presets.
-
-**Agent-harness study on SpreadsheetBench-2** (`configs/ssb2_codex.yaml`). UCoE runs inside the Codex coding-agent harness with GPT-5.6-luna (medium reasoning effort) as the actor and GPT-5.6-sol (extra-high reasoning effort) as the verifier model, both through the Codex app server. Every actor and verifier call is a fresh Codex session in an isolated task directory with a shell running Python and `openpyxl`, file editing confined to that directory, a workbook recalculation helper, no network and no approvals. The harness state is an experience block of at most 12 trigger/procedure entries over five dimensions (requirements, formulas, references, preservation, numbers), at most 3 per dimension and 2,400 characters in total. Candidate verifiers keep a fixed catalogue of base criteria (requirements implemented, formulas correct, references intended, unrelated content preserved, values plausible, no recalculated error values, workbook changed), may append at most two criteria, and are selected on the contrast families `formula_error`, `broken_reference` and `regression_damage` with 2 initial candidates, 4 selection / 2 held-out sources per family, ε = 0.01 and checkpoints after tasks 34 and 67. The commands run in order:
+Every preset in `configs/` reproduces one paper setting and names the table and row in its header comment. The actors are Qwen3-8B and Qwen3.8-27B, the verifier model is Qwen3.6-35B-A3B and the judge is Qwen3.5-397B-A17B, all served through the Tinker API; `config.yaml` already carries the paper's default hyperparameters. For example, the Arena-Hard cell of Table 1 with Qwen3-8B (58.30 preference against direct generation):
 
 ```bash
-bash process_data.sh configs/ssb2_codex.yaml                      # pin the checker and the dataset, build the task tree
-bash run_agent_harness.sh configs/ssb2_codex.yaml manifest        # freeze the task stream and the calibration chunks
-bash run_agent_harness.sh configs/ssb2_codex.yaml pin-probe       # verify the served model and effort of every role
-bash run_agent_harness.sh configs/ssb2_codex.yaml smoke           # live smoke on two reserved calibration tasks
-bash run_agent_harness.sh configs/ssb2_codex.yaml run --arm ucoe  # also: --arm native (direct generation), --arm judge (LLM as a Judge)
-bash run_agent_harness.sh configs/ssb2_codex.yaml official        # benchmark checker with LibreOffice recalculation
+bash process_data.sh configs/arena_hard_qwen8b.yaml
+bash run_ucoe.sh     configs/arena_hard_qwen8b.yaml
+bash eval.sh         configs/arena_hard_qwen8b.yaml
+```
+
+The same three commands with `configs/refinebench_qwen8b.yaml` (relation discovery enabled) give the RefineBench cell, and `bash eval.sh configs/ifbench_qwen8b.yaml all` adds the native metric for a Table 2 cell. Presets follow the pattern `<benchmark>_qwen8b.yaml` / `<benchmark>_qwen27b.yaml` for the six open-ended benchmarks of Table 1, plus `ifbench_qwen8b.yaml`, `hard_math_qwen8b.yaml` and `bigcodebench_qwen8b.yaml` for Table 2. The Arena-Hard ablations are config changes: `ucoe.checkpoints: []` freezes the initial verifier and `ucoe.memory.capacity: 0` disables harness-state updates.
+
+The SpreadsheetBench-2 agent-harness study (`configs/ssb2_codex.yaml`; UCoE 22.7% exact match against 17.3% for direct generation and LLM as a Judge) needs the Codex CLI app server with GPT-5.6-luna as the actor and GPT-5.6-sol as the verifier model, plus LibreOffice for workbook recalculation:
+
+```bash
+bash process_data.sh configs/ssb2_codex.yaml
+bash run_agent_harness.sh configs/ssb2_codex.yaml manifest
+bash run_agent_harness.sh configs/ssb2_codex.yaml pin-probe
+bash run_agent_harness.sh configs/ssb2_codex.yaml smoke
+bash run_agent_harness.sh configs/ssb2_codex.yaml run --arm ucoe   # also: --arm native, --arm judge
+bash run_agent_harness.sh configs/ssb2_codex.yaml official
 bash run_agent_harness.sh configs/ssb2_codex.yaml report
 ```
 
-`run` is fail-closed: it refuses to start without a passing pin probe and a smoke report bound to the current protocol and roles. The UCoE arm builds its calibration drafts, contrast banks and initial verifier on demand; `calib-drafts`, `banks` and `h0` run those preparatory steps separately, `status` and `audit` inspect a run, and `bash run_agent_harness.sh configs/ssb2_codex.yaml all` executes the whole sequence for the three arms. Everything lands under `output.work_dir` (`manifest.json`, `state/`, `tasks/<arm>/`, `ucoe/`, `smoke/` for the live smoke's own work directory, `official.json`, `report.json`). `--initial-candidates K` must accompany `manifest` (or be set as `ucoe.initial_candidates` before it runs), because K is frozen into the manifest and every later command refuses a different value.
-
-The paper reports 22.7% exact-match accuracy for UCoE against 17.3% for both direct generation and LLM as a Judge on the 75-task stream.
-
-**Default hyperparameters** (shared by the Qwen3-8B and Qwen3.8-27B runs; `config.yaml` already matches them):
-
-- Verifier synthesis: 2 initial candidates, 1 new candidate per checkpoint, at most 2 new criteria per candidate
-- Response contrasts: 3 reference families with 24 selection / 96 held-out sources per family; 12 / 24 sources for each relation family
-- Response revision: 1 revision attempt per task, acceptance margin ε = 0.01
-- Procedural memory: capacity 12, at most 2 entries per dimension, at most 2 retrieved procedures within 64 words, at most 1 new procedure per accepted revision, token-Jaccard deduplication at 0.75
-- Verifier updates: checkpoints after tasks 128 and 256 on Arena-Hard (per-benchmark schedules above), regression tolerance κ = 0.10, the relative update rule
-- Decoding: generation / revision temperature 0.7 on Arena-Hard (the other benchmarks' suite values are listed in their presets), scoring / synthesis / distillation temperature 0
-
-`output.ceilings` caps the number of new calls per model class (actor, verifier, judge, comparator) and every run records actor, verifier-model and judge calls separately.
+`bash run_agent_harness.sh configs/ssb2_codex.yaml all` executes the whole sequence; `run` refuses to start without a passing pin probe and smoke.
 
 ## Citation
 
