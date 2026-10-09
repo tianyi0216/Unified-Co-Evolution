@@ -2,7 +2,7 @@
 
   <h3>Verifier&ndash;Harness Co-Evolution for Training-Free Self-Improvement on Open-Ended Tasks</h3>
 
-  <p><b>UCoE (Unified Co-Evolution)</b> &nbsp;&middot;&nbsp; ICLR 2027 (under review)</p>
+  <p><b>UCoE (Unified Co-Evolution)</b></p>
 
   <p>
     <a href="https://tianyi0216.github.io/">Tianyi Xu</a><sup>1,*</sup>&nbsp;&middot;&nbsp;
@@ -29,7 +29,6 @@
   </p>
 
   <p>
-    <img src="https://img.shields.io/badge/ICLR%202027-under%20review-4B0082?style=flat-square" alt="ICLR 2027 (under review)">
     <!-- arXiv badge: uncomment once the preprint is posted.
     <a href="https://arxiv.org/abs/XXXX.XXXXX">
       <img src="https://img.shields.io/badge/arXiv-XXXX.XXXXX-B31B1B?style=flat-square&logo=arxiv" alt="arXiv">
@@ -232,7 +231,6 @@ bash run_agent_harness.sh configs/ssb2_codex.yaml report
       title={Verifier--Harness Co-Evolution for Training-Free Self-Improvement on Open-Ended Tasks},
       author={Tianyi Xu and Yaolun Zhang and Yiran Wu and Joe Nguyen and Shengyu Dai and Saba Moeinizade and Zhenwen Shao and Qingyun Wu and Huazheng Wang},
       year={2026},
-      note={Under review},
 }
 ```
 
