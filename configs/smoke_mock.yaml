@@ -1,0 +1,78 @@
+# UCoE smoke preset: offline end-to-end run on the deterministic mock backend (no API keys, no network).
+# Exercises the whole lifecycle on 6 Arena-Hard tasks with one checkpoint and tiny contrast banks. It reproduces
+# no paper number; it exists so that the launchers and the test suite run anywhere in minutes:
+#   bash process_data.sh configs/smoke_mock.yaml
+#   bash run_ucoe.sh configs/smoke_mock.yaml && bash eval.sh configs/smoke_mock.yaml
+# Configuration: contract-only (relation discovery disabled), as in the paper's Arena-Hard Qwen3-8B cell.
+
+benchmark:
+  name: arena_hard
+  data_dir: data/processed/arena_hard
+  n_tasks: 6
+  seed: 42
+
+models:
+  backend: mock                        # deterministic offline transport; the names below only label the ledger
+  actor: Qwen/Qwen3-8B
+  verifier: Qwen/Qwen3.6-35B-A3B
+  comparator: Qwen/Qwen3.8-27B
+  judge: Qwen/Qwen3.5-397B-A17B
+  openai:
+    base_url: null
+    api_key_env: OPENAI_API_KEY
+    extra_body: {}
+
+decoding:
+  generation: {max_tokens: 4096, temperature: 0.7}
+  revision:   {max_tokens: 4096, temperature: 0.7}
+  scoring:    {max_tokens: 640, temperature: 0.0}
+  synthesis:  {max_tokens: 6000, temperature: 0.0, thinking: true}
+  localize:   {max_tokens: 640, temperature: 0.0}
+  distill:    {max_tokens: 256, temperature: 0.0}
+  judge:      {max_tokens: 512, temperature: 0.0}
+
+ucoe:
+  initial_candidates: 2
+  candidates_per_checkpoint: 1
+  max_new_criteria: 2
+  eps: 0.01
+  checkpoints: [3]                     # one verifier update before task 3
+  regression_tolerance: 0.10
+  update_rule: relative
+  contrasts:
+    selection_per_family: 2            # tiny banks: 2 selection + 2 held-out sources per reference family
+    heldout_per_family: 2
+    relation_selection_per_family: 1
+    relation_heldout_per_family: 1
+    chunk: 16
+    floor: 0.8333
+    reuse_sources_across_stages: false
+  relation_discovery:
+    enabled: false
+    n_discovery_prompts: 32
+    max_pairs: 24
+    max_modules: 2
+    min_recurrence: 3
+  memory:
+    capacity: 12
+    per_dimension: 2
+    max_retrieved: 2
+    token_cap: 64
+    dedup_jaccard: 0.75
+    at_draft: true
+
+evaluation:
+  judge_both_orders: true
+  bootstrap: {reps: 2000, block: 2, seed: 42}   # small bootstrap: 6 tasks only
+  native:
+    evaluator: null
+
+output:
+  work_dir: runs/smoke
+  workers: 2
+  smoke: true
+  ceilings:
+    actor: null
+    verifier: null
+    judge: null
+    comparator: null

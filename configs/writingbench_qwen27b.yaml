@@ -1,0 +1,89 @@
+# UCoE preset: WritingBench, Qwen3.8-27B actor.
+# Configuration of the research run behind this cell (the paper does not state it per cell): relation discovery
+#   enabled, i.e. the reference families plus the mined relation families.
+# Reproduces Table "Open-ended preference against matched direct generation" (tab:cross-benchmark), block
+#   Qwen3.8-27B, row UCoE, column WritingBench: 54.40 tie-adjusted preference vs Direct Generation (50.00).
+# Native metric Table "Benchmark-specific metrics" (tab:qwen-benchmark-outcomes): Critic score 8.215 (1 to 10)
+#   from Critic-7B -> bash eval.sh configs/writingbench_qwen27b.yaml native (needs the critic endpoint below).
+# Verifier checkpoints of that run: after tasks 128 and 256 (the Arena-Hard table lists 128 and 256).
+# Decoding of that run (the adapter's suite constants, repeated below): drafts at temperature 0.0 (greedy), the local
+#   repair at 0.3, distillation 320 tokens; the paper's hyperparameter table lists the Arena-Hard values 0.7 / 0.7.
+# Usage: bash process_data.sh configs/writingbench_qwen27b.yaml && bash run_ucoe.sh
+#   configs/writingbench_qwen27b.yaml && bash eval.sh configs/writingbench_qwen27b.yaml
+# See config.yaml for the meaning of every key.
+
+benchmark:
+  name: writingbench
+  data_dir: data/processed/writingbench
+  n_tasks: 500
+  seed: 42
+
+models:
+  backend: tinker
+  actor: Qwen/Qwen3.8-27B
+  verifier: Qwen/Qwen3.6-35B-A3B
+  comparator: Qwen/Qwen3.5-397B-A17B
+  judge: Qwen/Qwen3.5-397B-A17B
+  openai:
+    base_url: null
+    api_key_env: OPENAI_API_KEY
+    extra_body: {}
+
+decoding:
+  generation: {max_tokens: 8192, temperature: 0.0}
+  revision:   {max_tokens: 8192, temperature: 0.3}
+  scoring:    {max_tokens: 640, temperature: 0.0}
+  synthesis:  {max_tokens: 6000, temperature: 0.0, thinking: true}
+  localize:   {max_tokens: 640, temperature: 0.0}
+  distill:    {max_tokens: 320, temperature: 0.0}
+  judge:      {max_tokens: 512, temperature: 0.0}
+
+ucoe:
+  initial_candidates: 2
+  candidates_per_checkpoint: 1
+  max_new_criteria: 2
+  eps: 0.01
+  checkpoints: [128, 256]
+  regression_tolerance: 0.10
+  update_rule: relative
+  contrasts:
+    selection_per_family: 24
+    heldout_per_family: 96
+    relation_selection_per_family: 12
+    relation_heldout_per_family: 24
+    chunk: 16
+    floor: 0.8333
+    reuse_sources_across_stages: false
+  relation_discovery:
+    enabled: true
+    n_discovery_prompts: 32
+    max_pairs: 24
+    max_modules: 2
+    min_recurrence: 3
+  memory:
+    capacity: 12
+    per_dimension: 2
+    max_retrieved: 2
+    token_cap: 64
+    dedup_jaccard: 0.75
+    at_draft: true
+
+evaluation:
+  judge_both_orders: true
+  bootstrap: {reps: 50000, block: 64, seed: 42}
+  native:
+    evaluator: null                    # the benchmark's own metric (see config.yaml)
+    critic:                            # OpenAI-compatible endpoint serving Critic-7B
+      base_url: http://localhost:8205/v1
+      model: AQuarterMile/WritingBench-Critic-Model-Qwen-7B
+      api_key_env: OPENAI_API_KEY
+
+output:
+  work_dir: runs/writingbench_qwen27b
+  workers: 16
+  smoke: false
+  ceilings:
+    actor: null
+    verifier: null
+    judge: null
+    comparator: null

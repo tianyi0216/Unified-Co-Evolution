@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+runs/
+data/processed/
+data/raw/
+.DS_Store
+*.egg-info
+src/eval/native/instruction_following_eval/ifbench/.nltk_data/

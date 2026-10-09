@@ -1,0 +1,28 @@
+# UCoE runtime dependencies. Install with: pip install -r requirements.txt
+# The core pipeline needs only the standard library plus PyYAML (Python 3.9+); everything else is optional and
+# imported lazily. Packages with a higher Python floor carry a version marker, so this file installs on 3.9 and 3.10
+# (skipping them) and in full on 3.11+.
+
+# Configuration
+pyyaml
+
+# Model backends (install the one named by models.backend)
+tinker; python_version >= "3.11"        # models.backend: tinker (Qwen actors / verifier / judge through the Tinker API)
+openai>=1.0            # models.backend: openai (OpenAI, Azure, vLLM or any OpenAI-compatible server);
+                       # also serves the WritingBench Critic-7B endpoint used by the native metric
+
+# Data preparation (official benchmark sources from the Hugging Face hub)
+huggingface_hub
+datasets
+
+# Native metrics
+math-verify; python_version >= "3.10"   # Hard-MATH answer matching (normalized string match when absent)
+absl-py                # IFBench official evaluator, vendored under src/eval/native/instruction_following_eval
+langdetect
+nltk                   # downloads punkt / stopwords / tagger resources on first use
+immutabledict
+emoji
+syllapy>=0.8.0
+
+# Agent-harness study (SpreadsheetBench-2)
+openpyxl

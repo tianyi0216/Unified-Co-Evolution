@@ -1,0 +1,88 @@
+# UCoE preset: MultiChallenge, Qwen3-8B actor.
+# Configuration of the research run behind this cell (the paper does not state it per cell): contract-only,
+#   i.e. the three reference families with relation discovery disabled.
+# Reproduces Table "Open-ended preference against matched direct generation" (tab:cross-benchmark), block
+#   Qwen3-8B, row UCoE, column MultiChallenge: 57.42 tie-adjusted preference vs Direct Generation (50.00).
+# Native metric Table "Benchmark-specific metrics" (tab:qwen-benchmark-outcomes): hidden-rubric accuracy 38.28
+#   -> bash eval.sh configs/multichallenge_qwen8b.yaml native.
+# Contrast quotas of that run: 8 selection / 36 held-out sources per reference family, drawn from the
+#   138-prompt calibration pool; sources may recur across checkpoints (disjoint within a checkpoint).
+#   The paper's hyperparameter table lists the Arena-Hard values (24 / 96, fresh sources at every checkpoint).
+# Verifier checkpoints of that run: after tasks 48 and 96 (the Arena-Hard table lists 128 and 256).
+# Decoding of that run (the adapter's suite constants, repeated below): drafts at temperature 0.0 (greedy), the local
+#   repair at 0.3, distillation 320 tokens; the paper's hyperparameter table lists the Arena-Hard values 0.7 / 0.7.
+# Usage: bash process_data.sh configs/multichallenge_qwen8b.yaml && bash run_ucoe.sh
+#   configs/multichallenge_qwen8b.yaml && bash eval.sh configs/multichallenge_qwen8b.yaml
+# See config.yaml for the meaning of every key.
+
+benchmark:
+  name: multichallenge
+  data_dir: data/processed/multichallenge
+  n_tasks: 128
+  seed: 42
+
+models:
+  backend: tinker
+  actor: Qwen/Qwen3-8B
+  verifier: Qwen/Qwen3.6-35B-A3B
+  comparator: Qwen/Qwen3.8-27B
+  judge: Qwen/Qwen3.5-397B-A17B
+  openai:
+    base_url: null
+    api_key_env: OPENAI_API_KEY
+    extra_body: {}
+
+decoding:
+  generation: {max_tokens: 4096, temperature: 0.0}
+  revision:   {max_tokens: 4096, temperature: 0.3}
+  scoring:    {max_tokens: 640, temperature: 0.0}
+  synthesis:  {max_tokens: 6000, temperature: 0.0, thinking: true}
+  localize:   {max_tokens: 640, temperature: 0.0}
+  distill:    {max_tokens: 320, temperature: 0.0}
+  judge:      {max_tokens: 512, temperature: 0.0}
+
+ucoe:
+  initial_candidates: 2
+  candidates_per_checkpoint: 1
+  max_new_criteria: 2
+  eps: 0.01
+  checkpoints: [48, 96]
+  regression_tolerance: 0.10
+  update_rule: relative
+  contrasts:
+    selection_per_family: 8
+    heldout_per_family: 36
+    relation_selection_per_family: 12
+    relation_heldout_per_family: 24
+    chunk: 16
+    floor: 0.8333
+    reuse_sources_across_stages: true
+  relation_discovery:
+    enabled: false
+    n_discovery_prompts: 32
+    max_pairs: 24
+    max_modules: 2
+    min_recurrence: 3
+  memory:
+    capacity: 12
+    per_dimension: 2
+    max_retrieved: 2
+    token_cap: 64
+    dedup_jaccard: 0.75
+    at_draft: true
+
+evaluation:
+  judge_both_orders: true
+  bootstrap: {reps: 50000, block: 64, seed: 42}
+  native:
+    evaluator: null                    # the benchmark's own metric (see config.yaml)
+
+output:
+  work_dir: runs/multichallenge_qwen8b
+  workers: 16
+  smoke: false
+  ceilings:
+    actor: null
+    verifier: null
+    judge: null
+    comparator: null

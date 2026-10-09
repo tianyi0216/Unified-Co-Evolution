@@ -1,0 +1,57 @@
+# UCoE inside the Codex agent harness on SpreadsheetBench-2.
+# Reproduces the agent-harness study (paper Results "UCoE transfers to a Codex agent harness", Figure "UCoE inside
+# the Codex agent harness on SpreadsheetBench-2"; Appendix "Agent-harness study on SpreadsheetBench-2"): actor
+# GPT-5.6-luna at medium effort, verifier GPT-5.6-sol at extra-high effort, both served through the Codex app
+# server; three arms (native = Direct Generation, judge = LLM as a Judge, ucoe) on one frozen family-stratified
+# stream with checkpoints after tasks 34 and 67. The paper evaluates the first 75 tasks of this stream
+# (benchmark.n_tasks: 75; 100 deploys the whole manifest).
+#
+#   python -m data.prepare_ssb2 --config configs/ssb2_codex.yaml
+#   bash run_agent_harness.sh manifest | pin-probe | smoke | run --arm ucoe | official | report
+
+benchmark:
+  name: spreadsheetbench2
+  data_dir: data/raw/ssb2                # checker checkout + data + agent-visible task tree (data/prepare_ssb2.py)
+  n_tasks: 75                            # deployment = first n_tasks of the frozen 100-task stream (75 = the paper)
+  category_targets: {Template: 30, Financial_Model: 40, Debugging: 30}
+  exclude_families: {Financial_Model: ["06"]}   # workbook family whose inputs cannot be read
+  hf_repo: KAKA22/SpreadsheetBench-v2
+  hf_revision: 9dea60025792fbac5928ce9f44812362dccbeecd
+  code_repo: https://github.com/RUCKBReasoning/SpreadsheetBench-2
+  code_commit: null                      # null = repository HEAD at preparation time (recorded in data_dir/pin.json)
+
+models:
+  backend: codex                         # Codex app server, one process per role; served model/effort checked
+  actor: {model: gpt-5.6-luna, effort: medium}
+  verifier: {model: gpt-5.6-sol, effort: xhigh}   # scorer, localizer and synthesizer
+
+ucoe:
+  initial_candidates: 2                  # K initial verifier candidates (slots h0a, h0b, ...; frozen in the manifest)
+  eps: 0.01                              # acceptance margin r(yR) > r(y0) + eps; selection success r(y+) > r(y-) + eps
+  checkpoints: [34, 67]                  # one challenger per checkpoint, empirical relative rule
+  contrasts:
+    selection_per_family: 4              # contrast pairs per family in every selection bank
+    heldout_per_family: 2                # contrast pairs per family in every held-out bank
+  memory:                                # experience block H (harness state)
+    capacity: 12
+    per_dimension: 3                     # dimensions: requirements, formulas, references, preservation, numbers
+    max_chars: 2400
+  gates:                                 # predeclared bank gates at initialization
+    min_family_coverage: 0.75            # scored fraction of pairs per family
+    min_worst_J: 0.0                     # the winner's worst-family J must be positive
+  calibration:
+    chunk_select: 26                     # frozen calibration sources per selection bank (drafted until quota is met)
+    chunk_heldout: 13
+    smoke_reserve: 4                     # calibration sources reserved for the live smoke (never banks)
+
+limits:
+  turns: 6000                            # total turns per arm before the run pauses
+  turn_timeout_s: 1500
+  idle_timeout_s: 600
+
+tools:
+  soffice: null                          # LibreOffice binary; null = env SOFFICE, PATH, then the macOS application path
+  lo_profile: null                       # profile with "always recalculate on load"; null = <work_dir>/lo_profile
+
+output:
+  work_dir: runs/ssb2_codex              # manifest, state, logs, banks, sealed archives, official results
