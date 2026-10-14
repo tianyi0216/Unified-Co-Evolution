@@ -7,12 +7,12 @@
   <p>
     <a href="https://tianyi0216.github.io/">Tianyi Xu</a><sup>1,*</sup>&nbsp;&middot;&nbsp;
     <a href="https://mercury7353.github.io/Yaolun-Zhang.github.io/">Yaolun Zhang</a><sup>1,4,*</sup>&nbsp;&middot;&nbsp;
-    Yiran Wu<sup>2,*</sup>&nbsp;&middot;&nbsp;
-    Joe Nguyen<sup>1</sup>&nbsp;&middot;&nbsp;
-    Shengyu Dai<sup>3</sup>&nbsp;&middot;&nbsp;
-    Saba Moeinizade<sup>3</sup>&nbsp;&middot;&nbsp;
-    Zhenwen Shao<sup>3</sup>&nbsp;&middot;&nbsp;
-    Qingyun Wu<sup>2,4</sup>&nbsp;&middot;&nbsp;
+    <a href="https://yiranwu0.github.io/">Yiran Wu</a><sup>2,*</sup>&nbsp;&middot;&nbsp;
+    <a href="https://realjoenguyen.github.io/">Joe Nguyen</a><sup>1</sup>&nbsp;&middot;&nbsp;
+    <a href="https://www.linkedin.com/in/shengyu-dai/">Shengyu Dai</a><sup>3</sup>&nbsp;&middot;&nbsp;
+    <a href="https://www.linkedin.com/in/saba-moeinizade/">Saba Moeinizade</a><sup>3</sup>&nbsp;&middot;&nbsp;
+    <a href="https://www.linkedin.com/in/shaozw/">Zhenwen Shao</a><sup>3</sup>&nbsp;&middot;&nbsp;
+    <a href="https://qingyun-wu.github.io/">Qingyun Wu</a><sup>2,4</sup>&nbsp;&middot;&nbsp;
     <a href="https://huazhengwang.github.io/">Huazheng Wang</a><sup>1&#9993;</sup>
   </p>
 
@@ -29,11 +29,9 @@
   </p>
 
   <p>
-    <!-- arXiv badge: uncomment once the preprint is posted.
-    <a href="https://arxiv.org/abs/XXXX.XXXXX">
-      <img src="https://img.shields.io/badge/arXiv-XXXX.XXXXX-B31B1B?style=flat-square&logo=arxiv" alt="arXiv">
+    <a href="https://arxiv.org/abs/2610.17609">
+      <img src="https://img.shields.io/badge/arXiv-2610.17609-B31B1B?style=flat-square&logo=arxiv" alt="arXiv">
     </a>
-    -->
     <a href="https://github.com/tianyi0216/Unified-Co-Evolution">
       <img src="https://img.shields.io/badge/Code-GitHub-181717?style=flat-square&logo=github" alt="Code">
     </a>
@@ -55,7 +53,7 @@ UCoE is a training-free self-improvement method for open-ended tasks. It evolves
 
 Across six open-ended benchmarks UCoE averages **59.00%** tie-adjusted preference against matched direct generation with Qwen3-8B and **57.19%** with Qwen3.8-27B (50 is parity). On three verifiable benchmarks it raises the mean from **36.06%** (direct generation) to **38.48%**. Inside the Codex coding-agent harness on SpreadsheetBench-2 it reaches **22.7%** exact-match accuracy against **17.3%** for both direct generation and a fixed LLM judge.
 
-This repository contains the UCoE pipeline (`src/`), the benchmark adapters and data preparation scripts (`data/`), the evaluation protocol (`src/eval/`), and the agent-harness port used for the SpreadsheetBench-2 study (`src/agent_harness/`).
+Paper: [arXiv:2610.17609](https://arxiv.org/abs/2610.17609). This repository contains the UCoE pipeline (`src/`), the benchmark adapters and data preparation scripts (`data/`), the evaluation protocol (`src/eval/`), and the agent-harness port used for the SpreadsheetBench-2 study (`src/agent_harness/`).
 
 ## Setup
 
@@ -227,10 +225,14 @@ bash run_agent_harness.sh configs/ssb2_codex.yaml report
 ## Citation
 
 ```bibtex
-@misc{xu2026ucoe,
-      title={Verifier--Harness Co-Evolution for Training-Free Self-Improvement on Open-Ended Tasks},
+@misc{xu2026verifierharnesscoevolutiontrainingfreeselfimprovement,
+      title={Verifier-Harness Co-Evolution for Training-Free Self-Improvement on Open-Ended Tasks},
       author={Tianyi Xu and Yaolun Zhang and Yiran Wu and Joe Nguyen and Shengyu Dai and Saba Moeinizade and Zhenwen Shao and Qingyun Wu and Huazheng Wang},
       year={2026},
+      eprint={2610.17609},
+      archivePrefix={arXiv},
+      primaryClass={cs.AI},
+      url={https://arxiv.org/abs/2610.17609},
 }
 ```
 
